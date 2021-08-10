@@ -2,9 +2,12 @@ const Product = require('../Model/product');
 const ErrorHandler = require('../utils/ErrorHandler');
 const CatchAsyncErrors = require('../MiddleWares/CatchAsyncError');
 const ApiFeatures = require('../utils/ApiFeatures');
-
+const crypto = require('crypto'); 
 // create new product api => /api/v1/admin/product/new
 exports.newProduct = CatchAsyncErrors( async (req, res, next) =>{
+
+     req.body.user = req.user.id;
+
    const product = await Product.create(req.body);
 
    res.status(201).json({
@@ -15,12 +18,13 @@ exports.newProduct = CatchAsyncErrors( async (req, res, next) =>{
 
 // get all products api => /api/v1/products
 exports.getProducts = CatchAsyncErrors(async (req, res, next) => {
+
     //  search api feature
     // const apiFeatures = new ApiFeatures(Product.find(), req.query)
-    //                         .search()
+    //                     .search()
 
+    // const products = await apiFeatures.query;
     const products = await Product.find();
-    // const products = await Product.find();
 
     res.status(200).json({
         success: true,

@@ -1,9 +1,10 @@
 const ErrorHandler =  require('../utils/ErrorHandler');
 const CatchAsyncError = require('../MiddleWares/CatchAsyncError');
 const User = require('../Model/user');
-const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-
+const sendToken = require('../utils/jwtToken');
+const crypto = require('crypto'); 
+const SendEmail = require('../utils/SendMail');
 
 // user register api => /api/v1/register
 exports.UserRegister = CatchAsyncError( async (req, res, next) =>{
@@ -19,62 +20,89 @@ exports.UserRegister = CatchAsyncError( async (req, res, next) =>{
         }
     })
 
-    //generate jwt token
-    const token = jwt.sign({id: this._id}, process.env.JWT_SECRET,{
-        expiresIn: "2h"
-    })
-     user.token = token
-
-    res.status(201).json({
-        success: true,
-        user
-    })
+    sendToken(user, 200, res);
 
 })
 
-
-// exports.Getuser = async (req, res, next) =>{
-
-//     const users = await User.find();
-
-//     res.status(200).json({
-//         success: true,
-//         users
-//     })
-// }
-
-
-exports.LoginUser = (req, res, next) =>{
-   
+exports.LoginUser = CatchAsyncError( async (req, res, next) =>{
+     
     const {email, password} = req.body
 
-    // we will check if email and password is entered
-    if(!email || !password){
-     return   next( new ErrorHandler('Please enter your Password and email', 400))
+    if(!email && !password){
+        res.status(404).json({
+            success: false,
+            message: "empty password and email"
+        })
     }
 
-    // checking or finding user in database
-    const user = User.findOne({email})
+    const user = await User.findOne({email})
+
+     const PasswordMatched = await bcrypt.compare(password, user.password);
+
+     if(!PasswordMatched){
+         res.status(404).json({
+             success: false,
+             message: "Invalid password!"
+         })
+     }
+
+    sendToken(user, 200, res)
+
+});
+
+exports.Forgotpassword = CatchAsyncError( async(req, res, next) =>{
+    const user = await User.findOne({email: req.body.email});
+
     if(!user){
-        return next(new ErrorHandler('please enter your correct password and email', 401))
+        return next(new ErrorHandler('Invalid Email Address please Enter Valid Email', 401))
     }
 
-    // if password is matched
-    const ispassMatched =   bcrypt.compare(password, user.password)
+  
+    // generate token using crypto
+    const resetToken  = crypto.randomBytes(12).toString('hex')
+    // create hash and set resetPasswordToken
+    const token = user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex')
+    user.resetPasswordExpire = Date(Date.now()) * 30 * 60 * 1000
 
-    if(!ispassMatched){
-        return next(new ErrorHandler('Your password is wrong please try again!!'))
-    }
+    await user.save({ validateBeforeSave: false});
 
-   const token = jwt.sign({id: this._id}, process.env.JWT_SECRET, {
-       expiresIn: '2h'
-   });    
+    const ResetUrl = `${req.protocol}://${req.get('host')}/api/v1/password/reset/${token}`
+    const message = `your password reset token is a follow: /n/n${ResetUrl}/n/n if you have not requested this email, then ignore it.`
 
-   user.token = token;
+    try {
+       await SendEmail({
+           email: user.email,
+           subject: "DireeGabaa Password Recovery..",
+           message
+        })
+        res.status(200).json({
+            success: true,
+            message: `Email send to ${user.email}`
+        })
 
-   res.status(200).json({
-       success: true,
-       user
-   })
+    } catch (err) {
+        user.resetPasswordToken = undefined,
+        user.resetPasswordExpire = undefined
     
-}
+        await user.save({ validateBeforeSave: false});
+
+        return next( new ErrorHandler(err.message, 500))
+
+    }
+  
+})
+
+
+// logout api => /api/v1/logout
+
+exports.Logout = CatchAsyncError( async(req, res, next)=>{
+    res.cookie('token', null , {
+        expires: new Date(Date.now()),
+        httpOnly: true
+    })
+
+    res.status(200).json({
+        success: true,
+        message: "Logging out.."
+    })
+})
