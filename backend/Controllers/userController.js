@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const sendToken = require('../utils/jwtToken');
 const crypto = require('crypto'); 
 const SendEmail = require('../utils/SendMail');
+const { json } = require('body-parser');
 
 // user register api => /api/v1/register
 exports.UserRegister = CatchAsyncError( async (req, res, next) =>{
@@ -22,6 +23,15 @@ exports.UserRegister = CatchAsyncError( async (req, res, next) =>{
 
     sendToken(user, 200, res);
 
+})
+
+exports.GetAllU = CatchAsyncError( async(req, res, next)=>{
+    const user = await User.find();
+    res.status(200).json({
+        success: true,
+        count: user.lenght,
+        user
+    })
 })
 
 exports.LoginUser = CatchAsyncError( async (req, res, next) =>{
@@ -62,7 +72,7 @@ exports.Forgotpassword = CatchAsyncError( async(req, res, next) =>{
     const resetToken  = crypto.randomBytes(12).toString('hex')
     // create hash and set resetPasswordToken
     const token = user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex')
-    user.resetPasswordExpire = Date(Date.now()) * 30 * 60 * 1000
+    user.resetPasswordExpire = Date.now() + 3600000;
 
     await user.save({ validateBeforeSave: false});
 
@@ -92,6 +102,32 @@ exports.Forgotpassword = CatchAsyncError( async(req, res, next) =>{
   
 })
 
+// resetpassword
+exports.CreateNewPassword = CatchAsyncError( async (req, res, next)=>{
+    
+    const {newPassword, confirmPassword} = req.body
+
+   await User.findOne({resetPasswordToken: req.params.token, resetPasswordExpire: {$gt: Date.now()}}).then((user) =>{
+
+       if(!user){
+           return next (new ErrorHandler('password reset is invalid or has been expire'))
+       }
+       if(newPassword !== confirmPassword){
+        return next(new ErrorHandler('Password does not match', 400))   
+       }
+       bcrypt.hash(newPassword, 10).then(hashPassword=>{
+         user.password = newPassword
+         resetPasswordToken = undefined
+         resetPasswordExpire = undefined
+         user.save().then((savedata) =>{
+             res.json({message: 'password update is successfuly'})
+         })
+       })
+   }).catch(err =>{
+           console.log(err)
+   })
+    
+    })
 
 // logout api => /api/v1/logout
 
