@@ -4,7 +4,7 @@ const {IsAuthenticateUser, IsAuthorizeRole} = require('../MiddleWares/ProtectAut
 
 const router = express.Router();
 // get all products api 
-router.route('/products').get(IsAuthenticateUser,IsAuthorizeRole('Admin'), getProducts)
+router.route('/products').get(IsAuthenticateUser, getProducts)
 
 // get single product by its ID api
 router.route('/product/:id').get(getSingleProduct)

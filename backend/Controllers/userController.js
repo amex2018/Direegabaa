@@ -5,7 +5,6 @@ const bcrypt = require('bcryptjs');
 const sendToken = require('../utils/jwtToken');
 const crypto = require('crypto'); 
 const SendEmail = require('../utils/SendMail');
-const { json } = require('body-parser');
 
 // user register api => /api/v1/register
 exports.UserRegister = CatchAsyncError( async (req, res, next) =>{
@@ -34,7 +33,7 @@ exports.GetAllU = CatchAsyncError( async(req, res, next)=>{
     })
 })
 
-exports.LoginUser = CatchAsyncError( async (req, res, next) =>{
+exports.LoginUser = async (req, res, next) =>{
      
     const {email, password} = req.body
 
@@ -46,19 +45,21 @@ exports.LoginUser = CatchAsyncError( async (req, res, next) =>{
     }
 
     const user = await User.findOne({email})
-
-     const PasswordMatched = await bcrypt.compare(password, user.password);
-
+    // console.log(user.password)
+     const PasswordMatched = await bcrypt.compare(password, user.password)
+//    console.log(PasswordMatched)
      if(!PasswordMatched){
          res.status(404).json({
              success: false,
              message: "Invalid password!"
          })
-     }
+     }else{
 
     sendToken(user, 200, res)
+     }
 
-});
+
+};
 
 exports.Forgotpassword = CatchAsyncError( async(req, res, next) =>{
     const user = await User.findOne({email: req.body.email});
@@ -103,7 +104,7 @@ exports.Forgotpassword = CatchAsyncError( async(req, res, next) =>{
 })
 
 // resetpassword
-exports.CreateNewPassword = CatchAsyncError( async (req, res, next)=>{
+exports.CreateNewPassword = async (req, res, next)=>{
     
     const {newPassword, confirmPassword} = req.body
 
@@ -115,19 +116,60 @@ exports.CreateNewPassword = CatchAsyncError( async (req, res, next)=>{
        if(newPassword !== confirmPassword){
         return next(new ErrorHandler('Password does not match', 400))   
        }
+
        bcrypt.hash(newPassword, 10).then(hashPassword=>{
          user.password = newPassword
-         resetPasswordToken = undefined
-         resetPasswordExpire = undefined
+         user.resetPasswordToken = null
+         user.resetPasswordExpire = null
          user.save().then((savedata) =>{
-             res.json({message: 'password update is successfuly'})
+             res.status(200).json({
+                 message: 'password update is successfuly',
+                 savedata
+                })
+
          })
        })
    }).catch(err =>{
            console.log(err)
    })
     
+    }
+
+// user profile => /api/v1/profile/me
+exports.GetUserProfile = CatchAsyncError( async (req, res, next)=>{
+
+    const user = await User.findById(req.user._id);
+
+    res.status(200).json({
+        success: true,
+        user
     })
+})
+
+// Change password => /api/v1/changepassword/me
+exports.ChangePassword =  async (req, res, next) => {
+
+    const user = await User.findById(req.user._id)
+        
+    // check old password is correct
+    const PrevIsMatched = await bcrypt.compare(req.body.oldPassword, user.password);
+       
+    if(!PrevIsMatched){
+        return next(new ErrorHandler('old password is incorrect' ,404))
+    }
+
+    // check new and confirm password
+    if(req.body.newPassword !== req.body.confirmPassword){
+        return next( new ErrorHandler('password does not matched', 403))
+    }
+
+    user.password = req.body.newPassword
+
+    await user.save();
+    
+    sendToken(user, 200, res)
+}
+
 
 // logout api => /api/v1/logout
 
