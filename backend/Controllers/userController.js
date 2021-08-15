@@ -8,8 +8,18 @@ const SendEmail = require('../utils/SendMail');
 
 // user register api => /api/v1/register
 exports.UserRegister = CatchAsyncError( async (req, res, next) =>{
-    const {name, email, password} = req.body
 
+    const {name, email, password} = req.body;
+
+    //   check email is exist email
+    const CheckEmail = await User.findOne({email})
+
+    if(CheckEmail){
+        res.status(403).json({
+            success: false,
+            message: 'Email is already register.. Please try another email.'
+        })
+    }
     const user = User.create({
         name,
         email,
@@ -20,18 +30,14 @@ exports.UserRegister = CatchAsyncError( async (req, res, next) =>{
         }
     })
 
-    sendToken(user, 200, res);
-
-})
-
-exports.GetAllU = CatchAsyncError( async(req, res, next)=>{
-    const user = await User.find();
-    res.status(200).json({
+    res.status(201).json({
         success: true,
-        count: user.lenght,
+        message: 'user successfully registered',
         user
     })
+
 })
+
 
 exports.LoginUser = async (req, res, next) =>{
      
@@ -45,13 +51,19 @@ exports.LoginUser = async (req, res, next) =>{
     }
 
     const user = await User.findOne({email})
-    // console.log(user.password)
+    if(!user){
+        res.status(404).json({
+            success: false,
+            message: 'Invalid email and password please enter valid password and email'
+        })
+    }
+    
      const PasswordMatched = await bcrypt.compare(password, user.password)
 //    console.log(PasswordMatched)
      if(!PasswordMatched){
          res.status(404).json({
              success: false,
-             message: "Invalid password!"
+             message: "Invalid password and email Please try again!"
          })
      }else{
 
@@ -146,6 +158,7 @@ exports.GetUserProfile = CatchAsyncError( async (req, res, next)=>{
     })
 })
 
+
 // Change password => /api/v1/changepassword/me
 exports.ChangePassword =  async (req, res, next) => {
 
@@ -170,9 +183,98 @@ exports.ChangePassword =  async (req, res, next) => {
     sendToken(user, 200, res)
 }
 
+// Get User BY Admin => /api/v1/admin/allusers
+exports.GetAllByAdmin = CatchAsyncError( async(req, res, next)=>{
+    const UserCounts = await User.countDocuments();
+
+    const user = await User.find();
+    res.status(200).json({
+        success: true,
+        count: UserCounts,
+         user
+    })
+})
+
+// get user details by admin=> /api/v1/admin/user/:id
+exports.GetSpecificUser = CatchAsyncError( async(req, res, next)=>{
+    const user = await User.findById(req.params.id)
+     if(!user){
+         res.status(404).json({
+             success: true,
+             message: "User Details is not Found"
+         })
+     }
+    res.status(200).json({
+        success: true,
+         user
+    })
+})
+// update user by admin => /api/v1/admin/userupdate/:id
+exports.UpdateUserByAdmin = CatchAsyncError( async(req, res, next)=>{
+ let user = await User.findById(req.params.id)
+ if(!user){
+     return next(new ErrorHandler('User Not Found!', 404))
+ }
+
+ user = await User.findByIdAndUpdate(user._id, req.body, {
+     new: true,
+     runValidators: true,
+     useFindAndModify: false
+ })
+  res.status(200).json({
+      success: true,
+      user
+  })
+})
+
+// update profile =>/api/v1/profile/me
+exports.UpdateProfile = CatchAsyncError( async(req, res, next)=>{
+ const UpdateData ={
+     name: req.body.name,
+     email: req.body.email
+ }
+
+ user = await User.findByIdAndUpdate(req.user._id, UpdateData, {
+     new: true,
+     runValidators: true,
+     useFindAndModify: false
+ })
+  res.status(200).json({
+      success: true,
+      user
+  })
+})
+
+
+// delete user by admin => /api/v1/admin/userdelete/:id
+exports.DeleteUserByAdmin = CatchAsyncError( async(req, res, next)=>{
+  const user = await User.findById(req.params.id)
+ if(!user){
+     return next(new ErrorHandler('User Not Found!', 404))
+ }
+ await User.findByIdAndDelete(user._id)
+ res.status(200).json({
+     success: true,
+     message: "User Deleted is successfully..!"
+ })
+
+
+})
+// deletemyAccount => /api/v1/deletemyaccount/:id
+exports.DeleteMyAccount = CatchAsyncError(async(req, res, next)=>{
+    const deleteuser = await User.findById(req.user._id)
+    await User.findByIdAndDelete(deleteuser)
+    res.cookie('token', null, {
+        expires: new Date(Date.now()),
+        httpOnly: true
+    })
+      res.status(200).json({
+        success: true,
+        message: "Logging out.."
+    })
+})
 
 // logout api => /api/v1/logout
-
 exports.Logout = CatchAsyncError( async(req, res, next)=>{
     res.cookie('token', null , {
         expires: new Date(Date.now()),

@@ -10,12 +10,12 @@ router.route('/products').get(IsAuthenticateUser, getProducts)
 router.route('/product/:id').get(getSingleProduct)
 
 // create new product by admin api
-router.route('/admin/product/new').post(IsAuthenticateUser, IsAuthorizeRole('Admin'), newProduct)
+router.route('/admin/product/new').post(IsAuthenticateUser, IsAuthorizeRole('admin'), newProduct)
 
 // update product by its ID api
-router.route('/admin/product/:id').put(IsAuthorizeRole('Admin'),UpdateProduct)
+router.route('/admin/product/:id').put(IsAuthenticateUser,IsAuthorizeRole('admin'),UpdateProduct)
 
 // delete product by its ID api
-router.route('/admin/product/:id').delete(IsAuthorizeRole('Admin'),DeleteProduct)
+router.route('/admin/product/:id').delete(IsAuthenticateUser,IsAuthorizeRole('admin'),DeleteProduct)
 
 module.exports = router
