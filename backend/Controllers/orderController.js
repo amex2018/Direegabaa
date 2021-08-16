@@ -76,3 +76,44 @@ exports.AllOrder = CatchAsyncError( async(req, res, next)=>{
         orders
     })
 })
+
+exports.UpdateOrderStatus = CatchAsyncError( async(req, res, next)=>{
+    const order = await Order.findById(req.params.id)
+
+    if(order.orderStatus === "delivered"){
+        return next(new ErrorHandler('you have alread delivered this order', 400))
+    }
+
+    order.orderItems.forEach(async item=>{
+          await updatestock(item.product, item.quantity)
+    })
+
+    order.orderStatus = req.body.orderStatus
+    order.deliveredAt = Date.now()
+
+    await order.save()
+    res.status(200).json({
+        success: true
+    })
+})
+
+async function updatestock(id , quantity){
+    const product = await Product.findById(id)
+    product.stock = product.stock - quantity
+    await product.save({ validateBeforeSave: false})
+}
+
+
+// delete order
+exports.DeleteOrder=CatchAsyncError(async(req, res, next)=>{
+    const order = await Order.findById(req.params.id)
+
+    if(!order){
+        return next( new ErrorHandler('Order not found', 404))
+    }
+
+    await order.remove();
+    res.status(200).json({
+        success: true
+    })
+})
